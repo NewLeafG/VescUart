@@ -15,7 +15,6 @@ void VescUart::setSerialPort(HardwareSerial* port)
 
 void VescUart::setDebugPort(Stream* port)
 {
-	debugPort = port;
 }
 
 int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
@@ -25,16 +24,15 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 
 	uint16_t counter = 0;
 	uint16_t endMessage = 256;
-	bool messageRead = false;
+	 bool msgRead = false;
 	uint8_t messageReceived[256];
 	uint16_t lenPayload = 0;
 	
 	uint32_t timeout = millis() + 100; // Defining the timestamp for timeout (100ms before timeout)
 
-	while ( millis() < timeout && messageRead == false) {
+	while ( (millis() < timeout) && (msgRead == false) ) {
 
-		while (serialPort->available()) {
-
+if(!serialPort->available())continue;
 			messageReceived[counter++] = serialPort->read();
 
 			if (counter == 2) {
@@ -48,15 +46,9 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 
 					case 3:
 						// ToDo: Add Message Handling > 255 (starting with 3)
-						if( debugPort != NULL ){
-							debugPort->println("Message is larger than 256 bytes - not supported");
-						}
 					break;
 
 					default:
-						if( debugPort != NULL ){
-							debugPort->println("Unvalid start bit");
-						}
 					break;
 				}
 			}
@@ -67,21 +59,14 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 
 			if (counter == endMessage && messageReceived[endMessage - 1] == 3) {
 				messageReceived[endMessage] = 0;
-				if (debugPort != NULL) {
-					debugPort->println("End of message reached!");
-				}
-				messageRead = true;
+				msgRead = true;
 				break; // Exit if end of message is reached, even if there is still more data in the buffer.
 			}
 		}
-	}
-	if(messageRead == false && debugPort != NULL ) {
-		debugPort->println("Timeout");
-	}
 	
 	bool unpacked = false;
 
-	if (messageRead) {
+	if (msgRead) {
 		unpacked = unpackPayload(messageReceived, endMessage, payloadReceived);
 	}
 
@@ -93,6 +78,7 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 		// No Message Read
 		return 0;
 	}
+
 }
 
 
@@ -106,27 +92,14 @@ bool VescUart::unpackPayload(uint8_t * message, int lenMes, uint8_t * payload) {
 	crcMessage &= 0xFF00;
 	crcMessage += message[lenMes - 2];
 
-	if(debugPort!=NULL){
-		debugPort->print("SRC received: "); debugPort->println(crcMessage);
-	}
 
 	// Extract payload:
 	memcpy(payload, &message[2], message[1]);
 
 	crcPayload = crc16(payload, message[1]);
 
-	if( debugPort != NULL ){
-		debugPort->print("SRC calc: "); debugPort->println(crcPayload);
-	}
 	
 	if (crcPayload == crcMessage) {
-		if( debugPort != NULL ) {
-			debugPort->print("Received: "); 
-			serialPrint(message, lenMes); debugPort->println();
-
-			debugPort->print("Payload :      ");
-			serialPrint(payload, message[1] - 1); debugPort->println();
-		}
 
 		return true;
 	}else{
@@ -161,9 +134,6 @@ int VescUart::packSendPayload(uint8_t * payload, int lenPay) {
 	messageSend[count++] = 3;
 	messageSend[count] = '\0';
 
-	if(debugPort!=NULL){
-		debugPort->print("UART package send: "); serialPrint(messageSend, count);
-	}
 
 	// Sending package
 	serialPort->write(messageSend, count);
@@ -225,6 +195,7 @@ bool VescUart::getVescValues(void) {
 	{
 		return false;
 	}
+
 }
 
 void VescUart::setNunchuckValues() {
@@ -245,11 +216,6 @@ void VescUart::setNunchuckValues() {
 	payload[ind++] = 0;
 	payload[ind++] = 0;
 
-	if(debugPort != NULL){
-		debugPort->println("Data reached at setNunchuckValues:");
-		debugPort->print("valueX = "); debugPort->print(nunchuck.valueX); debugPort->print(" valueY = "); debugPort->println(nunchuck.valueY);
-		debugPort->print("LowerButton = "); debugPort->print(nunchuck.lowerButton); debugPort->print(" UpperButton = "); debugPort->println(nunchuck.upperButton);
-	}
 
 	packSendPayload(payload, 11);
 }
@@ -295,27 +261,7 @@ void VescUart::setDuty(float duty) {
 }
 
 void VescUart::serialPrint(uint8_t * data, int len) {
-	if(debugPort != NULL){
-		for (int i = 0; i <= len; i++)
-		{
-			debugPort->print(data[i]);
-			debugPort->print(" ");
-		}
-
-		debugPort->println("");
-	}
 }
 
 void VescUart::printVescValues() {
-	if(debugPort != NULL){
-		debugPort->print("avgMotorCurrent: "); 	debugPort->println(data.avgMotorCurrent);
-		debugPort->print("avgInputCurrent: "); 	debugPort->println(data.avgInputCurrent);
-		debugPort->print("dutyCycleNow: "); 	debugPort->println(data.dutyCycleNow);
-		debugPort->print("rpm: "); 				debugPort->println(data.rpm);
-		debugPort->print("inputVoltage: "); 	debugPort->println(data.inpVoltage);
-		debugPort->print("ampHours: "); 		debugPort->println(data.ampHours);
-		debugPort->print("ampHoursCharges: "); 	debugPort->println(data.ampHoursCharged);
-		debugPort->print("tachometer: "); 		debugPort->println(data.tachometer);
-		debugPort->print("tachometerAbs: "); 	debugPort->println(data.tachometerAbs);
-	}
 }

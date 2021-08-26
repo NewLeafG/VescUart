@@ -1,88 +1,97 @@
 #include "VescUart.h"
 #include <HardwareSerial.h>
 
-VescUart::VescUart(void){
-	nunchuck.valueX         = 127;
-	nunchuck.valueY         = 127;
-	nunchuck.lowerButton  	= false;
-	nunchuck.upperButton  	= false;
+VescUart::VescUart(void)
+{
+	nunchuck.valueX = 127;
+	nunchuck.valueY = 127;
+	nunchuck.lowerButton = false;
+	nunchuck.upperButton = false;
 }
 
-void VescUart::setSerialPort(HardwareSerial* port)
+void VescUart::setSerialPort(HardwareSerial *port)
 {
 	serialPort = port;
 }
 
-void VescUart::setDebugPort(Stream* port)
+void VescUart::setDebugPort(Stream *port)
 {
 }
 
-int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
+int VescUart::receiveUartMessage(uint8_t *payloadReceived)
+{
 
 	// Messages <= 255 starts with "2", 2nd byte is length
 	// Messages > 255 starts with "3" 2nd and 3rd byte is length combined with 1st >>8 and then &0xFF
 
 	uint16_t counter = 0;
 	uint16_t endMessage = 256;
-	 bool msgRead = false;
+	bool msgRead = false;
 	uint8_t messageReceived[256];
 	uint16_t lenPayload = 0;
-	
+
 	uint32_t timeout = millis() + 100; // Defining the timestamp for timeout (100ms before timeout)
 
-	while ( (millis() < timeout) && (msgRead == false) ) {
+	while ((millis() < timeout) && (msgRead == false))
+	{
 
-if(!serialPort->available())continue;
-			messageReceived[counter++] = serialPort->read();
+		if (!serialPort->available())
+			continue;
+		messageReceived[counter++] = serialPort->read();
 
-			if (counter == 2) {
+		if (counter == 2)
+		{
 
-				switch (messageReceived[0])
-				{
-					case 2:
-						endMessage = messageReceived[1] + 5; //Payload size + 2 for sice + 3 for SRC and End.
-						lenPayload = messageReceived[1];
-					break;
+			switch (messageReceived[0])
+			{
+			case 2:
+				endMessage = messageReceived[1] + 5; //Payload size + 2 for sice + 3 for SRC and End.
+				lenPayload = messageReceived[1];
+				break;
 
-					case 3:
-						// ToDo: Add Message Handling > 255 (starting with 3)
-					break;
+			case 3:
+				// ToDo: Add Message Handling > 255 (starting with 3)
+				break;
 
-					default:
-					break;
-				}
-			}
-
-			if (counter >= sizeof(messageReceived)) {
+			default:
 				break;
 			}
-
-			if (counter == endMessage && messageReceived[endMessage - 1] == 3) {
-				messageReceived[endMessage] = 0;
-				msgRead = true;
-				break; // Exit if end of message is reached, even if there is still more data in the buffer.
-			}
 		}
-	
+
+		if (counter >= sizeof(messageReceived))
+		{
+			break;
+		}
+
+		if (counter == endMessage && messageReceived[endMessage - 1] == 3)
+		{
+			messageReceived[endMessage] = 0;
+			msgRead = true;
+			break; // Exit if end of message is reached, even if there is still more data in the buffer.
+		}
+	}
+
 	bool unpacked = false;
 
-	if (msgRead) {
+	if (msgRead)
+	{
 		unpacked = unpackPayload(messageReceived, endMessage, payloadReceived);
 	}
 
-	if (unpacked) {
+	if (unpacked)
+	{
 		// Message was read
-		return lenPayload; 
+		return lenPayload;
 	}
-	else {
+	else
+	{
 		// No Message Read
 		return 0;
 	}
-
 }
 
-
-bool VescUart::unpackPayload(uint8_t * message, int lenMes, uint8_t * payload) {
+bool VescUart::unpackPayload(uint8_t *message, int lenMes, uint8_t *payload)
+{
 
 	uint16_t crcMessage = 0;
 	uint16_t crcPayload = 0;
@@ -92,23 +101,24 @@ bool VescUart::unpackPayload(uint8_t * message, int lenMes, uint8_t * payload) {
 	crcMessage &= 0xFF00;
 	crcMessage += message[lenMes - 2];
 
-
 	// Extract payload:
 	memcpy(payload, &message[2], message[1]);
 
 	crcPayload = crc16(payload, message[1]);
 
-	
-	if (crcPayload == crcMessage) {
+	if (crcPayload == crcMessage)
+	{
 
 		return true;
-	}else{
+	}
+	else
+	{
 		return false;
 	}
 }
 
-
-int VescUart::packSendPayload(uint8_t * payload, int lenPay) {
+int VescUart::packSendPayload(uint8_t *payload, int lenPay)
+{
 
 	uint16_t crcPayload = crc16(payload, lenPay);
 	int count = 0;
@@ -134,7 +144,6 @@ int VescUart::packSendPayload(uint8_t * payload, int lenPay) {
 	messageSend[count++] = 3;
 	messageSend[count] = '\0';
 
-
 	// Sending package
 	serialPort->write(messageSend, count);
 
@@ -142,8 +151,8 @@ int VescUart::packSendPayload(uint8_t * payload, int lenPay) {
 	return count;
 }
 
-
-bool VescUart::processReadPacket(uint8_t * message) {
+bool VescUart::processReadPacket(uint8_t *message)
+{
 
 	COMM_PACKET_ID packetId;
 	int32_t ind = 0;
@@ -151,35 +160,65 @@ bool VescUart::processReadPacket(uint8_t * message) {
 	packetId = (COMM_PACKET_ID)message[0];
 	message++; // Removes the packetId from the actual message (payload)
 
-	switch (packetId){
-		case COMM_GET_VALUES: // Structure defined here: https://github.com/vedderb/bldc/blob/43c3bbaf91f5052a35b75c2ff17b5fe99fad94d1/commands.c#L164
+	switch (packetId)
+	{
+	case COMM_GET_VALUES: // Structure defined here: https://github.com/vedderb/bldc/blob/43c3bbaf91f5052a35b75c2ff17b5fe99fad94d1/commands.c#L164
 
-			data.tempFET            = buffer_get_float16(message, 10.0, &ind);
-			data.tempMotor          = buffer_get_float16(message, 10.0, &ind);
-			data.avgMotorCurrent 	= buffer_get_float32(message, 100.0, &ind);
-			data.avgInputCurrent 	= buffer_get_float32(message, 100.0, &ind);
+		if (0 == ESC_type)
+		{
+			data.tempFET = buffer_get_float16(message, 10.0, &ind);
+			data.tempMotor = buffer_get_float16(message, 10.0, &ind);
+			data.avgMotorCurrent = buffer_get_float32(message, 100.0, &ind);
+			data.avgInputCurrent = buffer_get_float32(message, 100.0, &ind);
 			ind += 8; // Skip the next 8 bytes
-			data.dutyCycleNow 		= buffer_get_float16(message, 1000.0, &ind);
-			data.rpm 				= buffer_get_int32(message, &ind);
-			data.inpVoltage 		= buffer_get_float16(message, 10.0, &ind);
-			data.ampHours 			= buffer_get_float32(message, 10000.0, &ind);
-			data.ampHoursCharged 	= buffer_get_float32(message, 10000.0, &ind);
-			ind += 8; // Skip the next 8 bytes 
-			data.tachometer 		= buffer_get_int32(message, &ind);
-			data.tachometerAbs 		= buffer_get_int32(message, &ind);
+			data.dutyCycleNow = buffer_get_float16(message, 1000.0, &ind);
+			data.rpm = buffer_get_int32(message, &ind);
+			data.inpVoltage = buffer_get_float16(message, 10.0, &ind);
+			data.ampHours = buffer_get_float32(message, 10000.0, &ind);
+			data.ampHoursCharged = buffer_get_float32(message, 10000.0, &ind);
+			ind += 8; // Skip the next 8 bytes
+			data.tachometer = buffer_get_int32(message, &ind);
+			data.tachometerAbs = buffer_get_int32(message, &ind);
 			return true;
+		}
+
+		else if (1 == ESC_type) //FOCBOX
+		{
+			// data.tempFET = buffer_get_float16(message, 10.0, &ind);
+			// data.tempFET = buffer_get_float16(message, 10.0, &ind);
+			// data.tempMotor = buffer_get_float16(message, 10.0, &ind);
+			// data.tempMotor = buffer_get_float16(message, 10.0, &ind);
+			// data.avgMotorCurrent = buffer_get_float32(message, 100.0, &ind);
+			// data.avgMotorCurrent = buffer_get_float32(message, 100.0, &ind);
+			// data.avgInputCurrent = buffer_get_float32(message, 100.0, &ind);
+			// ind += 16; // Skip the next 8 bytes
+			// data.dutyCycleNow = buffer_get_float16(message, 1000.0, &ind);
+			// data.dutyCycleNow = buffer_get_float16(message, 1000.0, &ind);
+			// data.rpm = buffer_get_int32(message, &ind);
+			// data.rpm = buffer_get_int32(message, &ind);
+			// data.inpVoltage = buffer_get_float16(message, 10.0, &ind);
+			// data.ampHours = buffer_get_float32(message, 10000.0, &ind);
+			// data.ampHoursCharged = buffer_get_float32(message, 10000.0, &ind);
+			// data.wattHours = buffer_get_float32(message, 10000.0, &ind);
+			// data.wattHoursCharged = buffer_get_float32(message, 10000.0, &ind);
+			// data.tachometer = buffer_get_int32(message, &ind);
+			// data.tachometer = buffer_get_int32(message, &ind);
+			// data.tachometerAbs = buffer_get_int32(message, &ind);
+			// data.tachometerAbs = buffer_get_int32(message, &ind);
+		}
 
 		break;
 
-		default:
-			return false;
+	default:
+		return false;
 		break;
 	}
 }
 
-bool VescUart::getVescValues(void) {
+bool VescUart::getVescValues(void)
+{
 
-	uint8_t command[1] = { COMM_GET_VALUES };
+	uint8_t command[1] = {COMM_GET_VALUES};
 	uint8_t payload[256];
 
 	packSendPayload(command, 1);
@@ -187,7 +226,8 @@ bool VescUart::getVescValues(void) {
 
 	int lenPayload = receiveUartMessage(payload);
 
-	if (lenPayload > 55) {
+	if (lenPayload > 55)
+	{
 		bool read = processReadPacket(payload); //returns true if sucessful
 		return read;
 	}
@@ -195,10 +235,10 @@ bool VescUart::getVescValues(void) {
 	{
 		return false;
 	}
-
 }
 
-void VescUart::setNunchuckValues() {
+void VescUart::setNunchuckValues()
+{
 	int32_t ind = 0;
 	uint8_t payload[11];
 
@@ -207,7 +247,7 @@ void VescUart::setNunchuckValues() {
 	payload[ind++] = nunchuck.valueY;
 	buffer_append_bool(payload, nunchuck.lowerButton, &ind);
 	buffer_append_bool(payload, nunchuck.upperButton, &ind);
-	
+
 	// Acceleration Data. Not used, Int16 (2 byte)
 	payload[ind++] = 0;
 	payload[ind++] = 0;
@@ -216,11 +256,11 @@ void VescUart::setNunchuckValues() {
 	payload[ind++] = 0;
 	payload[ind++] = 0;
 
-
 	packSendPayload(payload, 11);
 }
 
-void VescUart::setCurrent(float current) {
+void VescUart::setCurrent(float current)
+{
 	int32_t index = 0;
 	uint8_t payload[5];
 
@@ -230,7 +270,8 @@ void VescUart::setCurrent(float current) {
 	packSendPayload(payload, 5);
 }
 
-void VescUart::setBrakeCurrent(float brakeCurrent) {
+void VescUart::setBrakeCurrent(float brakeCurrent)
+{
 	int32_t index = 0;
 	uint8_t payload[5];
 
@@ -240,17 +281,19 @@ void VescUart::setBrakeCurrent(float brakeCurrent) {
 	packSendPayload(payload, 5);
 }
 
-void VescUart::setRPM(float rpm) {
+void VescUart::setRPM(float rpm)
+{
 	int32_t index = 0;
 	uint8_t payload[5];
 
-	payload[index++] = COMM_SET_RPM ;
+	payload[index++] = COMM_SET_RPM;
 	buffer_append_int32(payload, (int32_t)(rpm), &index);
 
 	packSendPayload(payload, 5);
 }
 
-void VescUart::setDuty(float duty) {
+void VescUart::setDuty(float duty)
+{
 	int32_t index = 0;
 	uint8_t payload[5];
 
@@ -260,8 +303,10 @@ void VescUart::setDuty(float duty) {
 	packSendPayload(payload, 5);
 }
 
-void VescUart::serialPrint(uint8_t * data, int len) {
+void VescUart::serialPrint(uint8_t *data, int len)
+{
 }
 
-void VescUart::printVescValues() {
+void VescUart::printVescValues()
+{
 }
